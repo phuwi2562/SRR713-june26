@@ -520,6 +520,72 @@ input:focus {
   color: var(--red);
 }
 
+.age-access-section {
+  margin-bottom: 20px;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(0, 184, 117, 0.1), transparent 22rem),
+    radial-gradient(circle at 100% 0%, rgba(0, 174, 202, 0.11), transparent 20rem),
+    rgba(255, 255, 255, 0.94);
+}
+
+.age-access-cards {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.age-access-card {
+  display: grid;
+  gap: 10px;
+  min-height: 146px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--age-color) 28%, #ffffff);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--age-color) 12%, #ffffff), #ffffff 72%);
+}
+
+.age-access-card span {
+  color: var(--ink);
+  font-size: 0.92rem;
+  font-weight: 900;
+}
+
+.age-access-card small,
+.age-access-meta span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.age-access-card strong {
+  color: var(--age-color);
+  font-size: clamp(1.55rem, 2.4vw, 2.2rem);
+  line-height: 1;
+}
+
+.age-access-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.age-access-meta b {
+  color: var(--ink);
+  font-size: 1.05rem;
+}
+
+.age-track span {
+  background: linear-gradient(90deg, var(--age-color), color-mix(in srgb, var(--age-color) 72%, #ffffff));
+}
+
+.age-access-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.75fr);
+  gap: 14px;
+}
+
 .leaderboard {
   margin-bottom: 20px;
   padding: 20px;
@@ -1148,8 +1214,9 @@ input:focus {
 
 .vhv-toolbar {
   display: grid;
-  grid-template-columns: minmax(220px, 320px);
+  grid-template-columns: minmax(220px, 320px) auto;
   gap: 12px;
+  align-items: end;
   margin-bottom: 14px;
   padding: 14px;
   border: 1px solid var(--line);
@@ -1379,8 +1446,14 @@ canvas {
 }
 
 .data-section {
+  position: relative;
   margin-top: 20px;
   padding: 20px;
+}
+
+.section-anchor {
+  position: absolute;
+  top: -90px;
 }
 
 .table-wrap {
@@ -1552,6 +1625,25 @@ tbody tr:hover {
 
 .action-print {
   color: var(--teal);
+}
+
+.monthly-print-button {
+  min-height: 46px;
+  border-color: rgba(0, 174, 202, 0.34);
+  background: linear-gradient(135deg, rgba(0, 174, 202, 0.14), rgba(43, 147, 255, 0.12));
+  color: #0b7181;
+  box-shadow: 0 10px 22px rgba(0, 116, 140, 0.08);
+}
+
+.monthly-print-button:hover {
+  background: linear-gradient(135deg, rgba(0, 174, 202, 0.2), rgba(43, 147, 255, 0.18));
+}
+
+.monthly-service-actions {
+  display: grid;
+  grid-template-columns: minmax(210px, 300px) auto;
+  gap: 12px;
+  align-items: end;
 }
 
 .registry-tabs {
@@ -1860,6 +1952,8 @@ tbody tr:hover {
   .import-panel,
   .executive-summary,
   .board-grid,
+  .age-access-cards,
+  .age-access-grid,
   .followup-cards,
   .quality-cards,
   .risk-cards,
@@ -1884,6 +1978,15 @@ tbody tr:hover {
 @media (max-width: 640px) {
   body {
     background: #f3f8f5;
+  }
+
+  .monthly-service-actions {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .monthly-print-button {
+    width: 100%;
   }
 
   .content {
@@ -1958,6 +2061,7 @@ tbody tr:hover {
   .import-panel,
   .executive-summary,
   .board-grid,
+  .age-access-grid,
   .followup-cards,
   .quality-cards,
   .risk-cards,
@@ -1969,6 +2073,10 @@ tbody tr:hover {
   .leaderboard-grid,
   .chart-grid {
     grid-template-columns: 1fr;
+  }
+
+  .age-access-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .household-map {

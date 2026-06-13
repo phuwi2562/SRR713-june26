@@ -17,6 +17,14 @@ const villageNames = {
   "11": "หมู่ 11 บ้านคำใหญ่",
   "12": "หมู่ 12 บ้านคำเจริญ",
 };
+const ageGroups = [
+  { key: "child", label: "เด็ก", range: "0-5 ปี", min: 0, max: 5, color: "#00aeca" },
+  { key: "school", label: "วัยเรียน", range: "6-14 ปี", min: 6, max: 14, color: "#2b93ff" },
+  { key: "teen", label: "วัยรุ่น", range: "15-24 ปี", min: 15, max: 24, color: "#7a54c4" },
+  { key: "working", label: "วัยทำงาน", range: "25-59 ปี", min: 25, max: 59, color: "#00b875" },
+  { key: "elderly", label: "วัยผู้สูงอายุ", range: "60 ปีขึ้นไป", min: 60, max: Infinity, color: "#f1a51d" },
+  { key: "unknown", label: "ไม่ระบุอายุ", range: "ไม่มีข้อมูลอายุ/วันเกิด", min: null, max: null, color: "#87928d" },
+];
 const resignedVhvs = new Set(["เจริญ สิทธิจันทร์", "เจริญ สิทธิ์จันทร์", "วิจัย เหล่าลาภะ", "บุญเรือง ศรีทองราช", "อุลา กันกำแหง", "ประยูร ทินแสง"]);
 const canonicalVhvNames = new Map([["กรรณธร แสนกั้ง", "กรรณธร แสนกั้ง"]]);
 const vhvVillageAssignments = new Map([["กรรณธร แสนกั้ง", "12"]]);
@@ -40,6 +48,8 @@ const els = {
   endDate: document.querySelector("#endDate"),
   populationImport: document.querySelector("#populationImport"),
   populationImportStatus: document.querySelector("#populationImportStatus"),
+  vhvkyPopulationImport: document.querySelector("#vhvkyPopulationImport"),
+  vhvkyPopulationImportStatus: document.querySelector("#vhvkyPopulationImportStatus"),
   screeningImport: document.querySelector("#screeningImport"),
   importStatus: document.querySelector("#importStatus"),
   importPanel: document.querySelector("#import"),
@@ -55,6 +65,7 @@ const els = {
   vhvRegistryTotal: document.querySelector("#vhvRegistryTotal"),
   vhvRegistryVillageFilter: document.querySelector("#vhvRegistryVillageFilter"),
   vhvRegistryRows: document.querySelector("#vhvRegistryRows"),
+  printVhvScreeningRegister: document.querySelector("#printVhvScreeningRegister"),
   activeRange: document.querySelector("#activeRange"),
   execNarrative: document.querySelector("#execNarrative"),
   execCoverage: document.querySelector("#execCoverage"),
@@ -76,6 +87,9 @@ const els = {
   boardTopWorkerDetail: document.querySelector("#boardTopWorkerDetail"),
   boardRiskLoad: document.querySelector("#boardRiskLoad"),
   boardRiskDetail: document.querySelector("#boardRiskDetail"),
+  ageAccessSubtitle: document.querySelector("#ageAccessSubtitle"),
+  ageAccessOverall: document.querySelector("#ageAccessOverall"),
+  ageAccessCards: document.querySelector("#ageAccessCards"),
   topVillages: document.querySelector("#topVillages"),
   villageCoverageRows: document.querySelector("#villageCoverageRows"),
   villageRows: document.querySelector("#villageRows"),
@@ -145,6 +159,8 @@ const els = {
   exportMeetingPack: document.querySelector("#exportMeetingPack"),
   printRegistry: document.querySelector("#printRegistry"),
   printFieldForm: document.querySelector("#printFieldForm"),
+  monthlyServiceVillageFilter: document.querySelector("#monthlyServiceVillageFilter"),
+  printMonthlyServiceRegister: document.querySelector("#printMonthlyServiceRegister"),
   logoutRegistry: document.querySelector("#logoutRegistry"),
   loginMessage: document.querySelector("#loginMessage"),
 };
@@ -175,6 +191,55 @@ function fmtDecimal(n, digits = 1) {
 function number(value) {
   const n = Number(String(value ?? "").replace(/,/g, "").trim());
   return Number.isFinite(n) ? n : null;
+}
+
+function optionalNumber(value) {
+  return String(value ?? "").trim() === "" ? null : number(value);
+}
+
+function firstValue(record, keys) {
+  for (const key of keys) {
+    if (record?.[key] !== undefined && record?.[key] !== null && String(record[key]).trim() !== "") return record[key];
+  }
+  return "";
+}
+
+function parseBirthDate(value) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const thai = parseThaiDateText(text);
+  if (thai) return thai;
+  const match = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  let year = Number(match[3]);
+  if (year < 100) year += 2500;
+  if (year > 2400) year -= 543;
+  if (!day || !month || !year) return null;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function ageFromRecord(record) {
+  const rawAge = firstValue(record, ["age", "อายุ"]);
+  const directAge = String(rawAge).trim() === "" ? null : number(rawAge);
+  if (directAge !== null && directAge >= 0 && directAge < 130) return Math.floor(directAge);
+  const birthDate = parseBirthDate(firstValue(record, ["birthDate", "birthdate", "dob", "วันเกิด", "วันเดือนปีเกิด"]));
+  if (!birthDate) return null;
+  const today = todayBangkok();
+  const birth = parseDate(birthDate);
+  if (!birth) return null;
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age -= 1;
+  return age >= 0 && age < 130 ? age : null;
+}
+
+function ageGroupFor(record) {
+  const age = ageFromRecord(record);
+  if (age === null) return ageGroups.find((group) => group.key === "unknown");
+  return ageGroups.find((group) => group.min !== null && age >= group.min && age <= group.max) || ageGroups.find((group) => group.key === "unknown");
 }
 
 function village(value) {
@@ -423,6 +488,83 @@ function updateExecutiveBoard(total, byVillage, screenedList) {
   els.boardTopWorkerDetail.textContent = topWorker ? `${fmt(topWorker.count)} ราย | ${Array.from(topWorker.villages).sort((a, b) => Number(a) - Number(b)).map((v) => `หมู่ ${v}`).join(", ")}` : "-";
   els.boardRiskLoad.textContent = fmt(riskLoad);
   els.boardRiskDetail.textContent = `เสี่ยง ${fmt(total.risk)} | DM/HT ${fmt(total.dm + total.ht + total.both)} | ควบคุมไม่ได้ ${fmt(total.uncontrolled)}`;
+}
+
+function ageAccessRows(screenedList, populationList) {
+  const rows = ageGroups.map((group) => ({ ...group, population: 0, served: 0, percent: 0 }));
+  const byKey = new Map(rows.map((row) => [row.key, row]));
+  const populationById = new Map(population.map((person) => [String(person.id), person]));
+  const populationByKey = new Map(population.map((person) => [personKey(person), person]));
+
+  for (const person of populationList) {
+    const group = ageGroupFor(person);
+    byKey.get(group.key).population += 1;
+  }
+
+  for (const record of latestScreenedPeople(screenedList)) {
+    const matched = populationById.get(String(record.populationId || "")) || populationByKey.get(personKey(record));
+    const group = ageGroupFor({ ...matched, ...record });
+    byKey.get(group.key).served += 1;
+  }
+
+  rows.forEach((row) => {
+    row.percent = row.population ? (row.served / row.population) * 100 : 0;
+  });
+  return rows;
+}
+
+function updateAgeAccessDashboard(screenedList, populationList) {
+  const rows = ageAccessRows(screenedList, populationList);
+  const target = rows.reduce((sum, row) => sum + row.population, 0);
+  const served = rows.reduce((sum, row) => sum + row.served, 0);
+  const overall = target ? (served / target) * 100 : 0;
+  const villageText = currentVillage() === "all" ? "ตำบลคำใหญ่ หมู่ 1-12" : `หมู่ ${currentVillage()} ตำบลคำใหญ่`;
+  const hasKnownAge = rows.some((row) => row.key !== "unknown" && (row.population > 0 || row.served > 0));
+
+  els.ageAccessOverall.textContent = `${overall.toFixed(1)}%`;
+  els.ageAccessSubtitle.textContent = hasKnownAge
+    ? `${villageText} มีผู้มารับบริการ ${fmt(served)} คน จากประชากร ${fmt(target)} คน แยกตามกลุ่มวัย`
+    : `${villageText} ยังไม่มีคอลัมน์อายุ/วันเกิดในข้อมูลประชากร ระบบจึงรวมไว้ที่กลุ่มไม่ระบุอายุ`;
+  els.ageAccessCards.innerHTML = rows
+    .map(
+      (row) => `<article class="age-access-card" style="--age-color:${row.color}">
+        <div>
+          <span>${escapeHtml(row.label)}</span>
+          <small>${escapeHtml(row.range)}</small>
+        </div>
+        <strong>${row.percent.toFixed(1)}%</strong>
+        <div class="age-access-meta">
+          <b>${fmt(row.served)}</b><span>/ ${fmt(row.population)} คน</span>
+        </div>
+        <div class="coverage-track age-track"><span style="width:${Math.min(row.percent, 100).toFixed(1)}%"></span></div>
+      </article>`
+    )
+    .join("");
+
+  chart("ageAccessBar", "bar", {
+    labels: rows.map((row) => row.label),
+    datasets: [
+      { label: "ประชากร", data: rows.map((row) => row.population), backgroundColor: "rgba(0, 174, 202, 0.22)", borderColor: colors.waist, borderWidth: 1, borderRadius: 10 },
+      { label: "ผู้มารับบริการ", data: rows.map((row) => row.served), backgroundColor: colors.screened, borderRadius: 10 },
+    ],
+  });
+
+  chart(
+    "ageAccessDoughnut",
+    "doughnut",
+    {
+      labels: rows.map((row) => row.label),
+      datasets: [
+        {
+          data: rows.map((row) => row.served),
+          backgroundColor: rows.map((row) => row.color),
+          borderWidth: 4,
+          borderColor: "#ffffff",
+        },
+      ],
+    },
+    { cutout: "68%" }
+  );
 }
 
 function updateTable(byVillage) {
@@ -1357,6 +1499,8 @@ function updateRegistry(screenedList) {
 function parseScreeningRows(rows) {
   const headers = rows[2] || [];
   const saltIndex = headers.findIndex((header) => /เค็ม|เกลือ|โซเดียม|salt|sodium/i.test(String(header || "")));
+  const ageIndex = headers.findIndex((header) => /อายุ|age/i.test(String(header || "")));
+  const birthDateIndex = headers.findIndex((header) => /วันเกิด|วันเดือนปีเกิด|birth|dob/i.test(String(header || "")));
   const dataRows = rows.slice(3).filter((row) => row.some((cell) => cell !== undefined && cell !== null && String(cell).trim() !== ""));
   const popByKey = new Map(population.map((person) => [personKey(person), person]));
   const parsed = dataRows.map((row, index) => {
@@ -1378,6 +1522,8 @@ function parseScreeningRows(rows) {
       screenedDateText: row[13] || "",
       screenedDate: parseThaiDateText(row[13] || ""),
       saltLevel: saltIndex >= 0 ? row[saltIndex] || "" : row[14] || "",
+      age: ageIndex >= 0 ? optionalNumber(row[ageIndex]) : null,
+      birthDate: birthDateIndex >= 0 ? parseBirthDate(row[birthDateIndex]) : "",
     };
     const pop = popByKey.get(personKey(base));
     const record = {
@@ -1396,6 +1542,9 @@ function yes(value) {
 }
 
 function parsePopulationRows(rows) {
+  const headers = rows[2] || [];
+  const ageIndex = headers.findIndex((header) => /อายุ|age/i.test(String(header || "")));
+  const birthDateIndex = headers.findIndex((header) => /วันเกิด|วันเดือนปีเกิด|birth|dob/i.test(String(header || "")));
   return rows
     .slice(3)
     .filter((row) => row.some((cell) => cell !== undefined && cell !== null && String(cell).trim() !== ""))
@@ -1409,7 +1558,103 @@ function parsePopulationRows(rows) {
       volunteer: row[5] || "",
       diagnosedDm: yes(row[6]),
       diagnosedHt: yes(row[7]),
+      age: ageIndex >= 0 ? optionalNumber(row[ageIndex]) : null,
+      birthDate: birthDateIndex >= 0 ? parseBirthDate(row[birthDateIndex]) : "",
     }));
+}
+
+function parseCsvRows(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+  const source = String(text || "").replace(/^\ufeff/, "");
+
+  for (let i = 0; i < source.length; i += 1) {
+    const char = source[i];
+    const next = source[i + 1];
+    if (quoted) {
+      if (char === '"' && next === '"') {
+        cell += '"';
+        i += 1;
+      } else if (char === '"') {
+        quoted = false;
+      } else {
+        cell += char;
+      }
+      continue;
+    }
+    if (char === '"') {
+      quoted = true;
+    } else if (char === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (char === "\n") {
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else if (char !== "\r") {
+      cell += char;
+    }
+  }
+  row.push(cell);
+  if (row.some((value) => String(value).trim() !== "")) rows.push(row);
+  return rows;
+}
+
+function headerIndex(headers, patterns) {
+  return headers.findIndex((header) => patterns.some((pattern) => pattern.test(String(header || "").trim())));
+}
+
+function rowValue(row, headers, patterns) {
+  const index = headerIndex(headers, patterns);
+  return index >= 0 ? row[index] || "" : "";
+}
+
+function villageFromText(value) {
+  const text = String(value || "").trim();
+  const match = text.match(/หมู่\s*(\d{1,2})/);
+  return match ? String(Number(match[1])) : village(text);
+}
+
+function diagnosedFromText(text, keywords) {
+  const value = String(text || "").toLowerCase();
+  return keywords.some((keyword) => value.includes(keyword));
+}
+
+function parseVhvkyPopulationCsv(text) {
+  const rows = parseCsvRows(text);
+  const headers = rows[0] || [];
+  const dataRows = rows.slice(1).filter((row) => row.some((cell) => String(cell || "").trim() !== ""));
+  return dataRows.map((row, index) => {
+    const prefix = rowValue(row, headers, [/^คำนำหน้า$/i, /^prefix$/i]).trim();
+    const firstName = rowValue(row, headers, [/^ชื่อ$/i, /^firstname$/i, /^first name$/i]).trim();
+    const lastName = rowValue(row, headers, [/^นามสกุล$/i, /^lastname$/i, /^last name$/i]).trim();
+    const fullName = rowValue(row, headers, [/^ชื่อ-นามสกุล$/i, /^ชื่อ\s*สกุล$/i, /^fullname$/i, /^name$/i]).trim();
+    const disease = rowValue(row, headers, [/โรคประจำตัว/i, /disease/i, /diagnosis/i]);
+    const cid = rowValue(row, headers, [/เลขบัตรประชาชน/i, /^cid$/i, /ประชาชน/i]).replace(/\D/g, "");
+    const birthDate = parseBirthDate(rowValue(row, headers, [/วันเกิด/i, /วันเดือนปีเกิด/i, /birth/i, /dob/i]));
+    return {
+      id: index + 1,
+      cid,
+      prefix,
+      name: cleanName(fullName || `${firstName} ${lastName}`),
+      sex: rowValue(row, headers, [/^เพศ$/i, /^sex$/i, /^gender$/i]),
+      houseNo: String(rowValue(row, headers, [/บ้านเลขที่/i, /house/i])).replace(/,/g, "").trim(),
+      village: villageFromText(rowValue(row, headers, [/^หมู่บ้าน$/i, /^หมู่$/i, /village/i])),
+      subdistrict: "คำใหญ่",
+      volunteer: rowValue(row, headers, [/อสม/i, /ผู้รับผิดชอบ/i, /volunteer/i, /vhv/i]),
+      diagnosedDm: diagnosedFromText(disease, ["เบาหวาน", "dm", "diabetes"]),
+      diagnosedHt: diagnosedFromText(disease, ["ความดัน", "ht", "hypertension"]),
+      age: optionalNumber(rowValue(row, headers, [/^อายุ$/i, /^age$/i])),
+      birthDate,
+      addressType: rowValue(row, headers, [/ประเภทการอยู่อาศัย/i]),
+      verifiedStatus: rowValue(row, headers, [/สถานะตรวจสอบ/i]),
+      updatedAt: rowValue(row, headers, [/วันที่ปรับปรุง/i, /updated/i]),
+      source: "VHVKY2026",
+    };
+  });
 }
 
 function rematchScreeningWithPopulation() {
@@ -1454,6 +1699,11 @@ function setImportStatus(message, type = "") {
 function setPopulationImportStatus(message, type = "") {
   els.populationImportStatus.textContent = message;
   els.populationImportStatus.className = type;
+}
+
+function setVhvkyPopulationImportStatus(message, type = "") {
+  els.vhvkyPopulationImportStatus.textContent = message;
+  els.vhvkyPopulationImportStatus.className = type;
 }
 
 function registryExportRows() {
@@ -1753,6 +2003,259 @@ function printFieldWorkForm() {
   printWindow.focus();
 }
 
+function latestRecordByPersonKey() {
+  const latest = new Map();
+  records.forEach((record) => {
+    const key = personKey(record);
+    const current = latest.get(key);
+    const date = record.screenedDate || "";
+    const currentDate = current?.screenedDate || "";
+    if (!current || date > currentDate) latest.set(key, record);
+  });
+  return latest;
+}
+
+function printVhvScreeningRegister() {
+  if (!registryUnlocked) {
+    alert("กรุณา login admin ก่อนพิมพ์ทะเบียนคัดกรอง อสม. เนื่องจากมีรายชื่อประชาชน");
+    location.hash = "#registry";
+    return;
+  }
+  const selectedVillage = vhvRegistryVillageValue();
+  const latest = latestRecordByPersonKey();
+  const groups = new Map();
+  population
+    .filter((person) => selectedVillage === "all" || person.village === selectedVillage)
+    .forEach((person) => {
+      const matched = latest.get(personKey(person));
+      const merged = matched
+        ? { ...person, ...matched, volunteer: person.volunteer || matched.volunteer, recorder: matched.recorder || person.volunteer }
+        : { ...person, sbp: null, dbp: null, dtx: null, bmi: null, waist: null, screenedDateText: "", screenedDate: null };
+      const villageId = merged.village || "-";
+      const worker = workerName(merged) || "ไม่ระบุ อสม.";
+      const key = `${villageId}|${worker}`;
+      if (!groups.has(key)) groups.set(key, { village: villageId, worker, records: [] });
+      groups.get(key).records.push({ ...merged, screenedStatus: matched ? "คัดกรองแล้ว" : "ยังไม่คัดกรอง" });
+    });
+
+  const groupRows = Array.from(groups.values()).sort((a, b) => Number(a.village) - Number(b.village) || a.worker.localeCompare(b.worker, "th"));
+  if (!groupRows.length) {
+    alert("ไม่พบข้อมูลสำหรับพิมพ์ทะเบียนคัดกรอง");
+    return;
+  }
+
+  const printedAt = new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short" }).format(new Date());
+  const sections = groupRows
+    .map((group) => {
+      const body = group.records
+        .sort(registrySort)
+        .map((record, index) => {
+          const bp = record.sbp != null || record.dbp != null ? `${record.sbp ?? "-"} / ${record.dbp ?? "-"}` : "";
+          const result = [
+            record.sbp >= 130 || record.dbp >= 80 ? "BP เฝ้าระวัง" : "",
+            record.dtx >= 100 ? "DTX เฝ้าระวัง" : "",
+            record.bmi >= 25 ? "BMI เกิน" : "",
+            isWaistHigh(record) ? "รอบเอวเกิน" : "",
+          ].filter(Boolean).join(", ");
+          return `<tr>
+            <td>${index + 1}</td>
+            <td>${escapeHtml(record.name || "-")}</td>
+            <td>${escapeHtml(record.sex || "-")}</td>
+            <td>${escapeHtml(record.houseNo || "-")}</td>
+            <td>${escapeHtml(record.screenedStatus)}</td>
+            <td>${escapeHtml(record.screenedDateText || "")}</td>
+            <td>${escapeHtml(bp)}</td>
+            <td>${record.dtx ?? ""}</td>
+            <td>${record.bmi ?? ""}</td>
+            <td>${record.waist ?? ""}</td>
+            <td>${escapeHtml(result || "ปกติ/รอตรวจ")}</td>
+            <td></td>
+            <td></td>
+          </tr>`;
+        })
+        .join("");
+      const screened = group.records.filter((record) => record.screenedStatus === "คัดกรองแล้ว").length;
+      const unscreenedCount = group.records.length - screened;
+      return `<section class="page">
+        <h1>ทะเบียนคัดกรองประชากร ≥35 ปี สำหรับ อสม.</h1>
+        <div class="meta">
+          <span>${escapeHtml(villageNames[group.village] || `หมู่ ${group.village}`)}</span>
+          <span>อสม.: ${escapeHtml(group.worker)}</span>
+          <span>รวม ${fmt(group.records.length)} ราย</span>
+          <span>คัดกรองแล้ว ${fmt(screened)} ราย</span>
+          <span>ยังไม่คัดกรอง ${fmt(unscreenedCount)} ราย</span>
+          <span>พิมพ์เมื่อ ${escapeHtml(printedAt)}</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>ลำดับ</th><th>ชื่อ - สกุล</th><th>เพศ</th><th>บ้านเลขที่</th><th>สถานะ</th><th>วันที่คัดกรอง</th>
+              <th>BP</th><th>DTX</th><th>BMI</th><th>รอบเอว</th><th>ผล/ประเด็นติดตาม</th><th>หมายเหตุ</th><th>ลายเซ็น</th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+        <div class="sign-row">
+          <span>ลงชื่อ อสม. ..................................................</span>
+          <span>ลงชื่อผู้ตรวจสอบ ..................................................</span>
+        </div>
+      </section>`;
+    })
+    .join("");
+
+  const html = `<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ทะเบียนคัดกรอง อสม.</title>
+    <style>
+      body{font-family:"Noto Sans Thai","Segoe UI",sans-serif;margin:0;color:#17211d;background:#f7faf8}
+      button{margin:12px 12mm;padding:8px 14px;border:1px solid #cddbd5;border-radius:10px;background:#fff;font:inherit}
+      .page{margin:12mm;padding:0;background:#fff;page-break-after:always}
+      h1{font-size:18px;margin:0 0 8px}
+      .meta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;color:#4e5d57;font-size:12px}
+      .meta span{padding:4px 8px;border:1px solid #dce8e2;border-radius:999px;background:#f5faf7}
+      table{width:100%;border-collapse:collapse;font-size:11px}
+      th,td{border:1px solid #d7e2dc;padding:5px;text-align:left;vertical-align:top}
+      th{background:#eef7f3}
+      td:nth-child(1),td:nth-child(8),td:nth-child(9),td:nth-child(10){text-align:center}
+      .sign-row{display:flex;justify-content:space-between;gap:20px;margin-top:16px;font-size:12px}
+      @media print{button{display:none}.page{margin:8mm;page-break-after:always}body{background:#fff}}
+    </style></head><body><button onclick="window.print()">พิมพ์ทะเบียนคัดกรอง</button>${sections}</body></html>`;
+  const printWindow = window.open("", "_blank");
+  printWindow.document.write(html);
+  printWindow.document.close();
+  printWindow.focus();
+}
+
+function villageServiceName(villageId) {
+  const label = villageNames[villageId] || `หมู่ ${villageId} บ้าน`;
+  const match = label.match(/บ้าน(.+)$/);
+  return match ? match[1].trim() : label.replace(/^หมู่\s*\d+/u, "").replace(/^บ้าน/u, "").trim();
+}
+
+function serviceMonthLabel(key) {
+  if (!key) return "ไม่ระบุเดือน";
+  const [year, month] = key.split("-").map(Number);
+  if (!year || !month) return key;
+  return new Intl.DateTimeFormat("th-TH", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
+}
+
+function printMonthlyServiceRegister() {
+  if (!registryUnlocked) {
+    alert("กรุณา login admin ก่อนพิมพ์ทะเบียนบริการรายเดือน เนื่องจากมีรายชื่อประชาชน");
+    location.hash = "#registry";
+    return;
+  }
+  const selectedVillage = els.monthlyServiceVillageFilter.value === "sync" ? currentVillage() : els.monthlyServiceVillageFilter.value;
+  const list = filteredRecords()
+    .filter((record) => selectedVillage === "all" || record.village === selectedVillage)
+    .slice()
+    .sort((a, b) => Number(a.village) - Number(b.village) || String(a.screenedDate || "").localeCompare(String(b.screenedDate || "")) || String(a.name).localeCompare(String(b.name), "th"));
+  if (!list.length) {
+    alert("ไม่พบข้อมูลผู้มารับบริการในช่วงเวลา/หมู่บ้านที่เลือก");
+    return;
+  }
+  const [start, end, rangeName] = currentRange();
+  const rangeText = dateLabel(start, end, rangeName);
+  const printedAt = new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short" }).format(new Date());
+  const byMonthVillage = new Map();
+  list.forEach((record) => {
+    const key = `${monthKey(record) || "ไม่ระบุเดือน"}|${record.village || "-"}`;
+    if (!byMonthVillage.has(key)) byMonthVillage.set(key, []);
+    byMonthVillage.get(key).push(record);
+  });
+
+  const sections = Array.from(byMonthVillage.entries())
+    .sort(([a], [b]) => {
+      const [monthA, villageA] = a.split("|");
+      const [monthB, villageB] = b.split("|");
+      return monthA.localeCompare(monthB) || Number(villageA) - Number(villageB);
+    })
+    .map(([key, villageRows]) => {
+      const [month, v] = key.split("|");
+      const normalCount = villageRows.filter((record) => record.group === "ปกติ").length;
+      const riskCount = villageRows.filter((record) => record.group === "เสี่ยง").length;
+      const patientCount = villageRows.filter((record) => ["DM", "HT", "DM+HT"].includes(record.group)).length;
+      const bmiHighCount = villageRows.filter(isBmiHigh).length;
+      const waistHighCount = villageRows.filter(isWaistHigh).length;
+      const body = villageRows
+        .map((record, index) => {
+          const bp = record.sbp != null || record.dbp != null ? `${record.sbp ?? "-"} / ${record.dbp ?? "-"}` : "";
+          const risk = [
+            record.group && record.group !== "ปกติ" ? record.group : "",
+            record.control || "",
+            isBmiHigh(record) ? "BMI เกิน" : "",
+            isWaistHigh(record) ? "รอบเอวเกิน" : "",
+          ].filter(Boolean).join(", ");
+          return `<tr>
+            <td>${index + 1}</td>
+            <td>${escapeHtml(record.screenedDateText || record.screenedDate || "")}</td>
+            <td>${escapeHtml(record.name || "-")}</td>
+            <td>${escapeHtml(record.sex || "-")}</td>
+            <td>${escapeHtml(record.houseNo || "-")}</td>
+            <td>${escapeHtml(bp)}</td>
+            <td>${record.dtx ?? ""}</td>
+            <td>${record.bmi ?? ""}</td>
+            <td>${record.waist ?? ""}</td>
+            <td>${escapeHtml(risk || "ปกติ")}</td>
+            <td>${escapeHtml(workerName(record) || "")}</td>
+            <td></td>
+          </tr>`;
+        })
+        .join("");
+      return `<section class="page">
+        <h1>ทะเบียนผู้มารับบริการ สถานีสุขภาพชุมชน บ้าน${escapeHtml(villageServiceName(v))}ตำบลคำใหญ่</h1>
+        <div class="meta">
+          <span>เดือน ${escapeHtml(serviceMonthLabel(month))}</span>
+          <span>${escapeHtml(villageNames[v] || `หมู่ ${v}`)}</span>
+          <span>${escapeHtml(rangeText)}</span>
+          <span>จำนวนผู้มารับบริการ ${fmt(villageRows.length)} ราย</span>
+          <span>พิมพ์เมื่อ ${escapeHtml(printedAt)}</span>
+        </div>
+        <div class="performance">
+          <span>ปกติ ${fmt(normalCount)} ราย</span>
+          <span>เสี่ยง ${fmt(riskCount)} ราย</span>
+          <span>DM/HT ${fmt(patientCount)} ราย</span>
+          <span>BMI เกิน ${fmt(bmiHighCount)} ราย</span>
+          <span>รอบเอวเกิน ${fmt(waistHighCount)} ราย</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>ลำดับ</th><th>วันที่รับบริการ</th><th>ชื่อ - สกุล</th><th>เพศ</th><th>บ้านเลขที่</th>
+              <th>BP</th><th>DTX</th><th>BMI</th><th>รอบเอว</th><th>ผลคัดกรอง/ประเด็นติดตาม</th><th>อสม./ผู้บันทึก</th><th>ลายเซ็น/หมายเหตุ</th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+        <div class="sign-row">
+          <span>ลงชื่อผู้จัดทำ ..................................................</span>
+          <span>ลงชื่อผู้ตรวจสอบ ..................................................</span>
+        </div>
+      </section>`;
+    })
+    .join("");
+
+  const html = `<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ผลงานทะเบียนบริการรายเดือน</title>
+    <style>
+      body{font-family:"Noto Sans Thai","Segoe UI",sans-serif;margin:0;color:#17211d;background:#f7faf8}
+      button{margin:12px 12mm;padding:8px 14px;border:1px solid #cddbd5;border-radius:10px;background:#fff;font:inherit}
+      .page{margin:12mm;padding:0;background:#fff;page-break-after:always}
+      h1{font-size:18px;margin:0 0 8px;text-align:center}
+      .meta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;color:#4e5d57;font-size:12px}
+      .meta span{padding:4px 8px;border:1px solid #dce8e2;border-radius:999px;background:#f5faf7}
+      .performance{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:0 0 10px;font-size:12px}
+      .performance span{padding:6px 8px;border:1px solid #dce8e2;border-radius:8px;background:#f8fbfa;text-align:center;font-weight:700}
+      table{width:100%;border-collapse:collapse;font-size:11px}
+      th,td{border:1px solid #d7e2dc;padding:5px;text-align:left;vertical-align:top}
+      th{background:#eef7f3}
+      td:nth-child(1),td:nth-child(4),td:nth-child(7),td:nth-child(8),td:nth-child(9){text-align:center}
+      .sign-row{display:flex;justify-content:space-between;gap:20px;margin-top:16px;font-size:12px}
+      @media print{button{display:none}.page{margin:8mm;page-break-after:always}body{background:#fff}}
+    </style></head><body><button onclick="window.print()">พิมพ์ผลงานทะเบียนบริการรายเดือน</button>${sections}</body></html>`;
+  const printWindow = window.open("", "_blank");
+  printWindow.document.write(html);
+  printWindow.document.close();
+  printWindow.focus();
+}
+
 async function importScreeningFile(file) {
   if (!registryUnlocked) {
     setImportStatus("กรุณา login admin ก่อนนำเข้าไฟล์คัดกรองจาก SRR7", "error");
@@ -1808,6 +2311,28 @@ async function importPopulationFile(file) {
   }
 }
 
+async function importVhvkyPopulationFile(file) {
+  if (!registryUnlocked) {
+    setVhvkyPopulationImportStatus("กรุณา login admin ก่อนนำเข้าข้อมูลประชากรจาก VHVKY2026", "error");
+    return;
+  }
+  try {
+    setVhvkyPopulationImportStatus("กำลังอ่านไฟล์ประชากรจาก VHVKY2026...");
+    const text = await file.text();
+    const imported = parseVhvkyPopulationCsv(text);
+    if (!imported.length) throw new Error("empty");
+    population = imported;
+    rematchScreeningWithPopulation();
+    rebuildUnscreened();
+    els.populationTotal.textContent = fmt(population.length);
+    setVhvkyPopulationImportStatus(`นำเข้า ${file.name} สำเร็จ: ${fmt(population.length)} รายการ`, "success");
+    setPopulationImportStatus("ใช้ข้อมูลประชากรล่าสุดจาก VHVKY2026", "success");
+    render();
+  } catch (error) {
+    setVhvkyPopulationImportStatus("นำเข้าข้อมูลประชากรจาก VHVKY2026 ไม่สำเร็จ กรุณาตรวจสอบว่าเป็นไฟล์ .csv ตามโครงสร้างที่ส่งออก", "error");
+  }
+}
+
 function updateRegistryLockState() {
   els.registryLogin.classList.toggle("unlocked", registryUnlocked);
   els.registryContent.classList.toggle("locked", !registryUnlocked);
@@ -1816,11 +2341,14 @@ function updateRegistryLockState() {
   els.importPanel.classList.toggle("import-unlocked", registryUnlocked);
   els.importLockedNotice.classList.toggle("unlocked", registryUnlocked);
   els.populationImport.disabled = !registryUnlocked;
+  els.vhvkyPopulationImport.disabled = !registryUnlocked;
   els.screeningImport.disabled = !registryUnlocked;
   els.populationImport.setAttribute("aria-disabled", String(!registryUnlocked));
+  els.vhvkyPopulationImport.setAttribute("aria-disabled", String(!registryUnlocked));
   els.screeningImport.setAttribute("aria-disabled", String(!registryUnlocked));
   if (registryUnlocked) {
     els.populationImportStatus.textContent ||= "พร้อมนำเข้าข้อมูลประชากรจาก SRR7";
+    els.vhvkyPopulationImportStatus.textContent ||= "พร้อมนำเข้าข้อมูลประชากรจาก VHVKY2026";
     els.importStatus.textContent ||= "พร้อมนำเข้าข้อมูลคัดกรองจาก SRR7";
   }
 }
@@ -2204,6 +2732,7 @@ function render() {
   updateKpis(total);
   updateExecutiveSummary(total, byVillage);
   updateExecutiveBoard(total, byVillage, screenedList);
+  updateAgeAccessDashboard(screenedList, popList);
   updateTable(byVillage);
   updateLeaderboard(byVillage);
   updateVillageCoverageRanking(byVillage);
@@ -2230,6 +2759,7 @@ function init() {
     els.followupVillageFilter.insertAdjacentHTML("beforeend", `<option value="${v}">หมู่ ${v}</option>`);
     els.mapVillageFilter.insertAdjacentHTML("beforeend", `<option value="${v}">${villageNames[v]}</option>`);
     els.vhvRegistryVillageFilter.insertAdjacentHTML("beforeend", `<option value="${v}">${villageNames[v]}</option>`);
+    els.monthlyServiceVillageFilter.insertAdjacentHTML("beforeend", `<option value="${v}">${villageNames[v]}</option>`);
   }
   const [fyStart, fyEnd] = fiscalBounds();
   els.startDate.value = iso(fyStart);
@@ -2248,6 +2778,15 @@ els.populationImport.addEventListener("change", () => {
   }
   const file = els.populationImport.files?.[0];
   if (file) importPopulationFile(file);
+});
+els.vhvkyPopulationImport.addEventListener("change", () => {
+  if (!registryUnlocked) {
+    alert("กรุณา login admin ก่อนนำเข้าข้อมูลประชากรจาก VHVKY2026");
+    els.vhvkyPopulationImport.value = "";
+    return;
+  }
+  const file = els.vhvkyPopulationImport.files?.[0];
+  if (file) importVhvkyPopulationFile(file);
 });
 els.screeningImport.addEventListener("change", () => {
   if (!registryUnlocked) {
@@ -2288,6 +2827,8 @@ els.exportVillageSheets.addEventListener("click", exportRegistryByVillageSheets)
 els.exportMeetingPack.addEventListener("click", exportMeetingPack);
 els.printRegistry.addEventListener("click", printRegistryList);
 els.printFieldForm.addEventListener("click", printFieldWorkForm);
+els.printVhvScreeningRegister.addEventListener("click", printVhvScreeningRegister);
+els.printMonthlyServiceRegister.addEventListener("click", printMonthlyServiceRegister);
 els.registryRows.addEventListener("click", (event) => {
   const button = event.target.closest(".person-open");
   if (!button) return;

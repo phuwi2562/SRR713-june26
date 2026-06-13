@@ -25,10 +25,13 @@
         <nav class="side-nav">
           <a href="#overview" class="active">ภาพรวม</a>
           <a id="importNav" href="#import">นำเข้าไฟล์</a>
+          <a href="#vhvky-import">นำเข้า VHVKY2026</a>
           <a href="#charts">กราฟวิเคราะห์</a>
+          <a href="#age-access">กลุ่มวัย</a>
           <a href="#household-map">แผนที่ อสม.</a>
           <a href="#vhv-registry">ทะเบียน อสม.</a>
           <a href="#summary">สรุปรายหมู่บ้าน</a>
+          <a href="#monthly-service-register">ทะเบียนบริการรายเดือน</a>
           <a href="#followup">แผนติดตามงาน</a>
           <a href="#quality">คุณภาพข้อมูล</a>
           <a href="#registry">ทะเบียนรายชื่อ</a>
@@ -87,18 +90,22 @@
 
         <section class="import-panel" id="import" aria-label="นำเข้าไฟล์คัดกรอง">
           <div>
-            <p class="eyebrow">SRR7 Import</p>
-            <h2>นำเข้าข้อมูลประชากรและข้อมูลคัดกรองจาก SRR7</h2>
-            <p>เลือกไฟล์ Excel จาก SRR7 ตามโครงสร้างไฟล์ประชากรและไฟล์คัดกรอง ระบบจะจับคู่ข้อมูลและอัปเดต Dashboard ใหม่ทันที</p>
+            <p class="eyebrow">SRR7 / VHVKY2026 Import</p>
+            <h2>นำเข้าข้อมูลประชากรและข้อมูลคัดกรอง</h2>
+            <p>เลือกไฟล์ประชากรจาก SRR7 หรือ VHVKY2026 และไฟล์คัดกรองจาก SRR7 ระบบจะจับคู่ข้อมูลและอัปเดต Dashboard ใหม่ทันที</p>
           </div>
           <div id="importLockedNotice" class="import-locked-notice">
             <strong>สำหรับ admin เท่านั้น</strong>
             <span>กรุณา login ที่เมนูทะเบียนรายชื่อ เพื่อปลดล็อกการนำเข้าข้อมูลประชากรและข้อมูลคัดกรอง</span>
           </div>
           <div id="importControl" class="import-control admin-only locked">
+            <span id="vhvky-import" class="section-anchor"></span>
             <label for="populationImport">ไฟล์ประชากรกลุ่มเป้าหมาย (.xlsx)</label>
             <input id="populationImport" type="file" accept=".xlsx,.xls" />
             <span id="populationImportStatus">ยังไม่ได้นำเข้าข้อมูลประชากรใหม่</span>
+            <label for="vhvkyPopulationImport">ไฟล์ประชากรจาก VHVKY2026 (.csv)</label>
+            <input id="vhvkyPopulationImport" type="file" accept=".csv,text/csv" />
+            <span id="vhvkyPopulationImportStatus">ยังไม่ได้นำเข้าข้อมูลประชากรจาก VHVKY2026</span>
             <label for="screeningImport">ไฟล์คัดกรอง (.xlsx)</label>
             <input id="screeningImport" type="file" accept=".xlsx,.xls" />
             <span id="importStatus">ยังไม่ได้นำเข้าไฟล์ใหม่</span>
@@ -155,6 +162,7 @@
                 <option value="all">ทุกหมู่บ้าน</option>
               </select>
             </div>
+            <button id="printVhvScreeningRegister" class="ghost-button action-print" type="button">Print ทะเบียนคัดกรอง อสม.</button>
           </div>
           <div class="table-wrap vhv-registry-wrap">
             <table>
@@ -243,6 +251,38 @@
               <span>กลุ่มเสี่ยงต้องติดตาม</span>
               <strong id="boardRiskLoad">0</strong>
               <small id="boardRiskDetail">เสี่ยง HT / DM และผู้ป่วยเดิม</small>
+            </article>
+          </div>
+        </section>
+
+        <section class="data-section age-access-section" id="age-access">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Service Access by Age Group</p>
+              <h2>การเข้าถึงบริการตามกลุ่มวัย</h2>
+              <p id="ageAccessSubtitle">เปรียบเทียบจำนวนผู้มารับบริการกับประชากรในแต่ละกลุ่มวัย ตามช่วงเวลาและหมู่บ้านที่เลือก</p>
+            </div>
+            <strong id="ageAccessOverall" class="registry-count">0%</strong>
+          </div>
+          <div id="ageAccessCards" class="age-access-cards"></div>
+          <div class="age-access-grid">
+            <article class="chart-panel">
+              <div class="panel-heading">
+                <div>
+                  <h2>ผู้มารับบริการเทียบกับประชากร</h2>
+                  <span>แยกตามกลุ่มวัย</span>
+                </div>
+              </div>
+              <canvas id="ageAccessBar"></canvas>
+            </article>
+            <article class="chart-panel compact">
+              <div class="panel-heading">
+                <div>
+                  <h2>สัดส่วนผู้มารับบริการ</h2>
+                  <span>ตามกลุ่มวัย</span>
+                </div>
+              </div>
+              <canvas id="ageAccessDoughnut"></canvas>
             </article>
           </div>
         </section>
@@ -455,10 +495,22 @@
         </section>
 
         <section class="data-section" id="summary">
+          <span id="monthly-service-register" class="section-anchor"></span>
           <div class="section-heading">
             <div>
               <p class="eyebrow">Village Summary</p>
               <h2>สรุปรายหมู่บ้าน</h2>
+              <p>เลือกช่วงเวลา เช่น เดือนนี้ หรือกำหนดเอง แล้วกดพิมพ์ผลงานทะเบียนบริการรายเดือนแยกรายหมู่บ้าน</p>
+            </div>
+            <div class="monthly-service-actions">
+              <div class="filter-group">
+                <label for="monthlyServiceVillageFilter">หมู่บ้านสำหรับพิมพ์</label>
+                <select id="monthlyServiceVillageFilter">
+                  <option value="sync">ตามตัวกรองหลัก</option>
+                  <option value="all">ทุกหมู่บ้าน</option>
+                </select>
+              </div>
+              <button id="printMonthlyServiceRegister" class="ghost-button action-print monthly-print-button" type="button">Print ผลงานทะเบียนบริการรายเดือน</button>
             </div>
           </div>
           <div class="table-wrap">
